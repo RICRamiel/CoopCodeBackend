@@ -42,7 +42,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
         rooms.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>()).put(session.getId(), session);
 
-        JsonNode roomCodeNode = JsonNodeFactory.instance.objectNode().put("code", roomCode.get(roomId));
+        //JsonNode roomCodeNode = JsonNodeFactory.instance.objectNode().put("code", roomCode.get(roomId));
 
         if (roomCode.containsKey(roomId)) {
             System.out.println(rooms.get(roomId));
@@ -59,7 +59,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
         String payload = message.getPayload();
         JsonNode json = objectMapper.readTree(payload);
 
-//        CodeChangeType type = CodeChangeType.valueOf(json.get("type").asText());
+        //CodeChangeType type = CodeChangeType.valueOf(json.get("type").asText());
         String type = json.get("type").asText();
         String roomId = json.get("roomId").asText();
         String userId = json.get("userId").asText();
@@ -176,11 +176,13 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
     private void broadcastPatch(String roomId, String patchText, String userId, String excludeSessionId) {
         Set<WebSocketSession> sessions = new HashSet<WebSocketSession>(rooms.get(roomId).values());
-        if (sessions == null) return;
 
         sessions.stream().filter(session -> session.isOpen() && !session.getId().equals(excludeSessionId)).forEach(session -> {
             try {
-                ObjectNode json = JsonNodeFactory.instance.objectNode().put("type", "PATCH").put("patch", patchText).put("userId", userId);
+                ObjectNode json = JsonNodeFactory.instance.objectNode()
+                        .put("type", "PATCH")
+                        .put("patch", patchText)
+                        .put("userId", userId);
                 WebSocketSession roomSession = rooms.get(roomId).get(session.getId());
                 synchronized (roomSession) {
                     session.sendMessage(new TextMessage(json.toString()));
@@ -211,6 +213,9 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String getQueryParam(WebSocketSession session, String name) {
-        return Arrays.stream(Objects.requireNonNull(session.getUri()).getQuery().split("&")).map(param -> param.split("=")).filter(pair -> pair.length == 2 && pair[0].equals(name)).map(pair -> pair[1]).findFirst().orElse("");
+        return Arrays.stream(Objects.requireNonNull(session.getUri()).getQuery().split("&"))
+                .map(param -> param.split("="))
+                .filter(pair -> pair.length == 2 && pair[0].equals(name))
+                .map(pair -> pair[1]).findFirst().orElse("");
     }
 }

@@ -1,0 +1,20 @@
+package org.ricramiel.coopeditbackend.domain.models.requests;
+
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class RoomEditRequestModel {
+    @NotNull
+    private UUID id;
+
+    private String name;
+}
