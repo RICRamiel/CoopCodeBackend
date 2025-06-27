@@ -46,7 +46,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         //todo delete!!!
-        Thread.sleep(190);
+        //Thread.sleep(190);
         log.debug("Incoming message: {}", message.getPayload());
 
         JsonNode json = objectMapper.readTree(message.getPayload());
@@ -91,6 +91,22 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                     log.error("Error processing operations", e);
                     sendError(session, "PROCESSING_ERROR", "Failed to apply operations");
                 }
+                break;
+
+            case "CURSOR_UPDATE":
+                int position = json.get("position").asInt();
+                String color = json.get("color").asText();
+
+                rooms.computeIfPresent(roomId, (id, roomState) -> {
+                    roomState.processCursorUpdate(
+                            userId,
+                            session.getId(),
+                            roomId,
+                            position,
+                            color
+                    );
+                    return roomState;
+                });
                 break;
         }
     }

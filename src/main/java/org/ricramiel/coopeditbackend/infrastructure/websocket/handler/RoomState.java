@@ -2,6 +2,7 @@ package org.ricramiel.coopeditbackend.infrastructure.websocket.handler;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -13,7 +14,10 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class RoomState {
+    // Остальные методы без изменений
+    @Getter
     private String content = "";
+    @Getter
     private int version = 0;
     private final List<Operation> operationHistory = new ArrayList<>();
     private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();
@@ -62,6 +66,29 @@ public class RoomState {
             sendErrorConfirmation(userId, clientOperations.stream().map(Operation::getId).collect(Collectors.toList()));
             log.error("Error processing operations in room state", e);
         }
+    }
+
+    public void processCursorUpdate(String userId, String sessionId, String roomId, int position, String color) {
+        broadcastCursorPosition(userId, roomId, position, color, sessionId);
+    }
+
+    private void broadcastCursorPosition(String userId, String roomId, int position, String color, String excludeSessionId) {
+        ObjectNode json = JsonNodeFactory.instance.objectNode()
+                .put("type", "REMOTE_CURSOR")
+                .put("userId", userId)
+                .put("roomId", roomId)
+                .put("position", position)
+                .put("color", color);
+
+        sessions.values().stream()
+                .filter(sessionInfo -> !sessionInfo.session.getId().equals(excludeSessionId))
+                .forEach(sessionInfo -> {
+                    try {
+                        sessionInfo.session.sendMessage(new TextMessage(json.toString()));
+                    } catch (IOException e) {
+                        log.error("Error broadcasting cursor info: {}", e.getMessage());
+                    }
+                });
     }
 
     private void sendConfirmation(String userId, List<Integer> operationIds) {
@@ -131,9 +158,6 @@ public class RoomState {
                 });
     }
 
-    // Остальные методы без изменений
-    public String getContent() { return content; }
-    public int getVersion() { return version; }
     public boolean isEmpty() { return sessions.isEmpty(); }
 
     public void addSession(WebSocketSession session, String userId) {
