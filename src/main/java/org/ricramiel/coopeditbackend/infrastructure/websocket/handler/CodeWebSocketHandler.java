@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Slf4j
 @Component
@@ -27,6 +29,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
     // Хранилище комнат: roomId -> RoomState
     private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Object> sessionLocks = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
@@ -45,8 +48,6 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        //todo delete!!!
-        //Thread.sleep(190);
         log.debug("Incoming message: {}", message.getPayload());
 
         JsonNode json = objectMapper.readTree(message.getPayload());
@@ -66,6 +67,8 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                 break;
 
             case "APPLY_OPERATIONS":
+                //todo delete!!!
+                Thread.sleep(160);
                 try {
                     int clientVersion = json.get("baseVersion").asInt();
                     Operation[] clientOperations = objectMapper.treeToValue(
@@ -124,19 +127,31 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendInitialState(WebSocketSession session, RoomState room) {
-        try {
-            ObjectNode json = JsonNodeFactory.instance.objectNode()
-                    .put("type", "INITIAL_STATE")
-                    .put("content", room.getContent())
-                    .put("version", room.getVersion());
+        Object sessionLock = sessionLocks.computeIfAbsent(
+                session.getId(),
+                id -> new Object()
+        );
 
-            session.sendMessage(new TextMessage(json.toString()));
-        } catch (IOException e) {
-            log.error("Error sending initial state: {}", e.getMessage());
+        synchronized(sessionLock) {
+            try {
+                ObjectNode json = JsonNodeFactory.instance.objectNode()
+                        .put("type", "INITIAL_STATE")
+                        .put("content", room.getContent())
+                        .put("version", room.getVersion());
+
+                session.sendMessage(new TextMessage(json.toString()));
+            } catch (IOException e) {
+                log.error("Error sending initial state: {}", e.getMessage());
+            }
         }
     }
 
-    private void sendError(WebSocketSession session, String errorType, String reason) {
+    @Scheduled(fixedRate = 1000 * 10)
+    public void broadcastCodeSnapshots() {
+        rooms.values().forEach(RoomState::broadcastCodeSnapshot);
+    }
+
+    private synchronized void sendError(WebSocketSession session, String errorType, String reason) {
         try {
             ObjectNode json = JsonNodeFactory.instance.objectNode()
                     .put("type", "ERROR")

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -154,6 +155,22 @@ public class RoomState {
                         sessionInfo.session.sendMessage(new TextMessage(json.toString()));
                     } catch (IOException e) {
                         log.error("Error broadcasting operations: {}", e.getMessage());
+                    }
+                });
+    }
+
+    public synchronized void broadcastCodeSnapshot() {
+        ObjectNode json = JsonNodeFactory.instance.objectNode()
+                .put("type", "CODE_SNAPSHOT")
+                .putPOJO("content", content)
+                .put("newVersion", version);
+
+        sessions.values()
+                .forEach(sessionInfo -> {
+                    try {
+                        sessionInfo.session.sendMessage(new TextMessage(json.toString()));
+                    } catch (IOException e) {
+                        log.error("Error broadcasting snapshot: {}", e.getMessage());
                     }
                 });
     }
