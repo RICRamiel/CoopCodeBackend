@@ -35,7 +35,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(jsr250Enabled=true)
+@EnableMethodSecurity(jsr250Enabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtFilter jwtFilter;
@@ -45,38 +45,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        http.csrf(AbstractHttpConfigurer::disable).cors(cors -> cors.configurationSource(corsConfigurationSource())).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-resources/*",
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/auth/login",
-                                "/auth/register",
-                                "/auth/oauth2/**",
-                                "/oauth2/**",
-                                "/ws/*",
-                                "*")
-                        .permitAll()
-                        .anyRequest().authenticated()
-                )
-                .oauth2Login(oauth2 -> oauth2
-                        .userInfoEndpoint(userInfo -> userInfo
-                                .userService(oidcUserService)
-                        )
-                        .successHandler(jwtAuthenticationSuccessHandler(authService, jwtModelMapper))
-                        .failureHandler(jwtAuthenticationFailureHandler())
-                )
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(
-                                oauth2AuthenticationEntryPoint()
-                        )
-                );
+        http.authorizeHttpRequests(auth -> auth.requestMatchers("/swagger-ui/**", "/swagger-resources/*", "/v3/api-docs/**", "/swagger-ui.html", "/auth/login", "/auth/register", "/auth/oauth2/**", "/oauth2/**", "/ws/*", "*").permitAll().anyRequest().authenticated()).oauth2Login(oauth2 -> oauth2.userInfoEndpoint(userInfo -> userInfo.userService(oidcUserService)).successHandler(jwtAuthenticationSuccessHandler(authService, jwtModelMapper)).failureHandler(jwtAuthenticationFailureHandler())).exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(oauth2AuthenticationEntryPoint()));
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -112,7 +83,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of("http://localhost:8080","http://localhost:3000"));
+        configuration.setAllowedOrigins(List.of("http://localhost:8080", "http://localhost:3000", "http://192.168.0.114:3000"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

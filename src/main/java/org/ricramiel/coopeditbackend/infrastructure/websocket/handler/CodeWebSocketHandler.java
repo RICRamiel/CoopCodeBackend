@@ -18,6 +18,7 @@ import org.ricramiel.coopeditbackend.common.util.diff_match_patch;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -28,7 +29,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     // Хранилище комнат: roomId -> (sessionId -> session)
     private final Map<String, Map<String, WebSocketSession>> rooms = new ConcurrentHashMap<>();
-
+    private final Map<String, Map<String, Integer>> roomCursors = new ConcurrentHashMap<>();
     // Текущий код для каждой комнаты
     private final Map<String, String> roomCode = new ConcurrentHashMap<>();
 
@@ -68,12 +69,13 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
         switch (type) {
             case "REQUEST_STATE":
                 sendMessage(session, "INITIAL_STATE", roomCode.get(roomId));
+                roomCursors.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>()).put(userId, 0);
                 break;
 
             case "APPLY_PATCH":
                 String patchText = json.get("patch").asText();
                 System.out.println("Received patch from user " + userId + " in room " + roomId);
-
+                int authorPosition = roomCursors.get(roomId).get(userId);
                 // Применяем патч к текущему документу комнаты
                 String currentContent = roomCode.get(roomId);
                 List<diff_match_patch.Patch> patches = dmp.patch_fromText(patchText);
@@ -95,11 +97,19 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                     roomCode.put(roomId, newContent);
 
                     // Рассылаем патч всем участникам комнаты, кроме отправителя
-                    broadcastPatch(roomId, patchText, userId, session.getId());
+                    broadcastPatch(roomId, patchText, userId, session.getId(), authorPosition);
                 } else {
                     // Отправляем ошибку клиенту
                     sendError(session, "PATCH_FAILED", "Failed to apply patch");
                 }
+                break;
+            case "CURSOR_UPDATE":
+                int position = json.get("position").asInt();
+                String color = json.has("color") ? json.get("color").asText() : "#000000";
+
+                // Сохраняем позицию курсора
+                roomCursors.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>()).put(userId, position);
+                broadcastCursor(roomId, userId, position, color, session.getId());
                 break;
 //            case CODE_REMOVE: {
 //                int length = contentJson.get("length").asInt();
@@ -138,11 +148,24 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private void broadcastCursor(String roomId, String userId, int position, String color, String excludeSessionId) {
+        Set<WebSocketSession> sessions = new HashSet<>(rooms.get(roomId).values());
+        if (sessions == null) return;
+
+        ObjectNode message = JsonNodeFactory.instance.objectNode().put("type", "REMOTE_CURSOR").put("userId", userId).put("position", position).put("color", color);
+
+        sessions.stream().filter(s -> s.isOpen() && !s.getId().equals(excludeSessionId)).forEach(s -> sendMessage(s, message));
+    }
+
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         String roomId = getQueryParam(session, "room");
 
         Map<String, WebSocketSession> room = rooms.get(roomId);
+
+        if (roomCursors.containsKey(roomId)) {
+            roomCursors.get(roomId).remove(session.getId());
+        }
 
         if (room != null) {
             room.remove(session.getId());
@@ -174,27 +197,54 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 //        }
 //    }
 
-    private void broadcastPatch(String roomId, String patchText, String userId, String excludeSessionId) {
-        Set<WebSocketSession> sessions = new HashSet<WebSocketSession>(rooms.get(roomId).values());
+    private void broadcastPatch(String roomId, String patchText, String userId, String excludeSessionId, int authorPosition) {
+        Set<WebSocketSession> sessions = new HashSet<>(rooms.get(roomId).values());
         if (sessions == null) return;
+
+        // Получаем актуальную позицию автора патча
 
         sessions.stream().filter(session -> session.isOpen() && !session.getId().equals(excludeSessionId)).forEach(session -> {
             try {
-                ObjectNode json = JsonNodeFactory.instance.objectNode().put("type", "PATCH").put("patch", patchText).put("userId", userId);
+                ObjectNode json = JsonNodeFactory.instance.objectNode().put("type", "PATCH").put("patch", patchText).put("userId", userId).put("position", authorPosition);  // Добавляем позицию!
                 WebSocketSession roomSession = rooms.get(roomId).get(session.getId());
                 synchronized (roomSession) {
                     session.sendMessage(new TextMessage(json.toString()));
                 }
             } catch (IOException e) {
-                System.err.println("Error broadcasting patch: " + e.getMessage());
+                log.error("Error broadcasting patch: {}", e.getMessage());
             }
         });
     }
+
+//    private void broadcastPatch(String roomId, String patchText, String userId, String excludeSessionId) {
+//        Set<WebSocketSession> sessions = new HashSet<WebSocketSession>(rooms.get(roomId).values());
+//        if (sessions == null) return;
+//
+//        sessions.stream().filter(session -> session.isOpen() && !session.getId().equals(excludeSessionId)).forEach(session -> {
+//            try {
+//                ObjectNode json = JsonNodeFactory.instance.objectNode().put("type", "PATCH").put("patch", patchText).put("userId", userId);
+//                WebSocketSession roomSession = rooms.get(roomId).get(session.getId());
+//                synchronized (roomSession) {
+//                    session.sendMessage(new TextMessage(json.toString()));
+//                }
+//            } catch (IOException e) {
+//                System.err.println("Error broadcasting patch: " + e.getMessage());
+//            }
+//        });
+//    }
 
     private void sendMessage(WebSocketSession session, String type, String content) {
         try {
             ObjectNode json = JsonNodeFactory.instance.objectNode().put("type", type).put("content", content);
             session.sendMessage(new TextMessage(json.toString()));
+        } catch (IOException e) {
+            System.err.println("Error sending message: " + e.getMessage());
+        }
+    }
+
+    private void sendMessage(WebSocketSession session, ObjectNode message) {
+        try {
+            session.sendMessage(new TextMessage(message.toString()));
         } catch (IOException e) {
             System.err.println("Error sending message: " + e.getMessage());
         }
