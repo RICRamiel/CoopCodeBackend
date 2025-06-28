@@ -43,7 +43,9 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         UUID roomId = UUID.fromString(getQueryParam(session, "room"));
 
-        if (!roomRepository.existsById(roomId)) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+
+        if (room == null) {
             sendError(session, "REFUSED", "No room with id " + roomId);
             return;
         }
@@ -59,12 +61,19 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
         wrappedSession.getAttributes().put(CustomWebSocketAttributeKeys.ROOM_ID, roomId);
 
-        RoomState room = rooms.computeIfAbsent(roomId, k -> new RoomState());
-        room.setId(roomId);
-        room.addSession(new RoomState.SessionInfo(session, userId, userRoles));
+        RoomState roomState = rooms.computeIfAbsent(roomId, k ->
+                new RoomState(
+                        room.getAccessMode(),
+                        room.getOwnerId(),
+                        room.getId(),
+                        room.getName(),
+                        room.getCode()
+                )
+        );
+        roomState.addSession(new RoomState.SessionInfo(session, userId, userRoles));
 
         // Отправляем текущее состояние новому клиенту
-        sendInitialState(wrappedSession, room);
+        sendInitialState(wrappedSession, roomState);
         log.info("User connected: {} to room: {}", userId, roomId);
     }
 

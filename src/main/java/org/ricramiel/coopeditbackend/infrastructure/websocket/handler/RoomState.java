@@ -3,6 +3,7 @@ package org.ricramiel.coopeditbackend.infrastructure.websocket.handler;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.ricramiel.coopeditbackend.domain.models.enums.Role;
@@ -17,22 +18,28 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class RoomState {
-    @Getter
-    @Setter
-    private RoomAccessMode accessMode = RoomAccessMode.PUBLIC;
-    @Getter
-    @Setter
-    private String ownerId = null;
-    @Getter
-    @Setter
-    private UUID id = null;
-    @Getter
-    @Setter
-    private String name = null;
-    @Getter
-    private String content = "";
+    @Getter @Setter
+    private RoomAccessMode accessMode;
+    @Getter @Setter
+    private UUID ownerId;
+    @Getter @Setter
+    private UUID id;
+    @Getter @Setter
+    private String name;
+    @Getter @Setter
+    private String content;
+
+    public RoomState(RoomAccessMode accessMode, UUID ownerId, UUID id, String name, String content) {
+        this.accessMode = accessMode;
+        this.ownerId = ownerId;
+        this.id = id;
+        this.name = name;
+        this.content = content;
+    }
+
     @Getter
     private int version = 0;
+
     private final List<Operation> operationHistory = new ArrayList<>();
     @Getter
     private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();

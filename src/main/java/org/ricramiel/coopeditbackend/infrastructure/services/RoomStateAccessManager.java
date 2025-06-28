@@ -37,10 +37,10 @@ public class RoomStateAccessManager {
     }
 
     private boolean isOwner(RoomState room, String userId) {
-        return !isCreatedByAnon(room) && room.getOwnerId().equals(userId);
+        return !isCreatedByAnon(room) && room.getOwnerId().toString().equals(userId);
     }
 
     private boolean isCreatedByAnon(RoomState room) {
-        return room.getOwnerId() == null || room.getOwnerId().startsWith("anon_");
+        return room.getOwnerId() == null;
     }
 }
