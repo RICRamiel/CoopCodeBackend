@@ -159,7 +159,7 @@ public class RoomState {
                 });
     }
 
-    public synchronized void broadcastCodeSnapshot() {
+    public void broadcastCodeSnapshot() {
         ObjectNode json = JsonNodeFactory.instance.objectNode()
                 .put("type", "CODE_SNAPSHOT")
                 .putPOJO("content", content)

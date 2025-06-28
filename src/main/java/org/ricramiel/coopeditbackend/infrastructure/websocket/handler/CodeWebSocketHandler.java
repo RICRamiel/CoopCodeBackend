@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
@@ -29,20 +30,25 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
     // Хранилище комнат: roomId -> RoomState
     private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Object> sessionLocks = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
+        WebSocketSession wrappedSession = new ConcurrentWebSocketSessionDecorator(
+                session,
+                5000, // timeout
+                1024 * 1024 // buffer size limit
+        );
+
         String roomId = getQueryParam(session, "room");
         String userId = getQueryParam(session, "user");
 
-        session.getAttributes().put("roomId", roomId);
+        wrappedSession.getAttributes().put("roomId", roomId);
 
         RoomState room = rooms.computeIfAbsent(roomId, k -> new RoomState());
-        room.addSession(session, userId);
+        room.addSession(wrappedSession, userId);
 
         // Отправляем текущее состояние новому клиенту
-        sendInitialState(session, room);
+        sendInitialState(wrappedSession, room);
         log.info("User connected: {} to room: {}", userId, roomId);
     }
 
@@ -68,7 +74,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
             case "APPLY_OPERATIONS":
                 //todo delete!!!
-                Thread.sleep(160);
+                //Thread.sleep(160);
                 try {
                     int clientVersion = json.get("baseVersion").asInt();
                     Operation[] clientOperations = objectMapper.treeToValue(
@@ -127,22 +133,15 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendInitialState(WebSocketSession session, RoomState room) {
-        Object sessionLock = sessionLocks.computeIfAbsent(
-                session.getId(),
-                id -> new Object()
-        );
+        try {
+            ObjectNode json = JsonNodeFactory.instance.objectNode()
+                    .put("type", "INITIAL_STATE")
+                    .put("content", room.getContent())
+                    .put("version", room.getVersion());
 
-        synchronized(sessionLock) {
-            try {
-                ObjectNode json = JsonNodeFactory.instance.objectNode()
-                        .put("type", "INITIAL_STATE")
-                        .put("content", room.getContent())
-                        .put("version", room.getVersion());
-
-                session.sendMessage(new TextMessage(json.toString()));
-            } catch (IOException e) {
-                log.error("Error sending initial state: {}", e.getMessage());
-            }
+            session.sendMessage(new TextMessage(json.toString()));
+        } catch (IOException e) {
+            log.error("Error sending initial state: {}", e.getMessage());
         }
     }
 
@@ -151,7 +150,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
         rooms.values().forEach(RoomState::broadcastCodeSnapshot);
     }
 
-    private synchronized void sendError(WebSocketSession session, String errorType, String reason) {
+    private void sendError(WebSocketSession session, String errorType, String reason) {
         try {
             ObjectNode json = JsonNodeFactory.instance.objectNode()
                     .put("type", "ERROR")
