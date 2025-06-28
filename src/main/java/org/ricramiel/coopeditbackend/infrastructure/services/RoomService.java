@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ricramiel.coopeditbackend.domain.models.entities.Room;
+import org.ricramiel.coopeditbackend.domain.models.entities.User;
 import org.ricramiel.coopeditbackend.domain.models.enums.RoomAccessMode;
 import org.ricramiel.coopeditbackend.domain.models.requests.RoomCreateRequestModel;
 import org.ricramiel.coopeditbackend.domain.models.requests.RoomEditRequestModel;
@@ -29,9 +30,16 @@ public class RoomService {
     @Value("${app.room.keep-alive-in-min}")
     private long roomKeepAliveInMin;
 
+    public Room saveRoom(@NotNull @Valid Room room) {
+        return roomRepository.save(room);
+    }
+
     public Room createRoom(@NotNull @Valid RoomCreateRequestModel model) {
+        UUID ownerId = currentUserService.isAuthenticated() ? currentUserService.getId() : null;
+
         Room room = Room.builder()
-                .owner(currentUserService.getUser())
+                .ownerId(ownerId)
+                .code("")
                 .name(model.getName())
                 .creationDate(LocalDateTime.now())
                 .accessMode(RoomAccessMode.PUBLIC)

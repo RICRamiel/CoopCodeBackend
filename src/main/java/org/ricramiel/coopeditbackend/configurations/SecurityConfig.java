@@ -60,8 +60,8 @@ public class SecurityConfig {
                                 "/auth/register",
                                 "/auth/oauth2/**",
                                 "/oauth2/**",
-                                "/ws/*",
-                                "*")
+                                "/ws/**",
+                                "*", "**")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

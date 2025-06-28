@@ -34,5 +34,6 @@ public class Room {
     @NotNull
     RoomAccessMode accessMode;
 
+    @NotNull
     String code;
 }

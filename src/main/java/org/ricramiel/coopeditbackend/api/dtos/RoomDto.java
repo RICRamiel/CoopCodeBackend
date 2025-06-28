@@ -18,7 +18,6 @@ public class RoomDto {
     @NotNull
     private UUID id;
 
-    @NotNull
     private UUID ownerId;
 
     private String name;
@@ -28,6 +27,4 @@ public class RoomDto {
 
     @NotNull
     RoomAccessMode accessMode;
-
-    String code;
 }

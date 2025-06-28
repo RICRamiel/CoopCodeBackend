@@ -4,9 +4,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ricramiel.coopeditbackend.domain.models.entities.Room;
+import org.ricramiel.coopeditbackend.domain.models.enums.Role;
+import org.ricramiel.coopeditbackend.domain.models.enums.RoomAction;
+import org.ricramiel.coopeditbackend.infrastructure.repositories.RoomRepository;
+import org.ricramiel.coopeditbackend.infrastructure.services.RoomAccessManager;
+import org.ricramiel.coopeditbackend.infrastructure.services.RoomService;
+import org.ricramiel.coopeditbackend.infrastructure.services.RoomStateAccessManager;
+import org.ricramiel.coopeditbackend.infrastructure.websocket.common.CustomWebSocketAttributeKeys;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -16,36 +25,43 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CodeWebSocketHandler extends TextWebSocketHandler {
-
+    private final RoomRepository roomRepository;
+    private final RoomStateAccessManager roomAccessManager;
     private final ObjectMapper objectMapper;
 
     // Хранилище комнат: roomId -> RoomState
-    private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
+    private final Map<UUID, RoomState> rooms = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
+        UUID roomId = UUID.fromString(getQueryParam(session, "room"));
+
+        if (!roomRepository.existsById(roomId)) {
+            sendError(session, "REFUSED", "No room with id " + roomId);
+            return;
+        }
+
+        String userId = session.getAttributes().get(CustomWebSocketAttributeKeys.USER_ID).toString();
+        Set<Role> userRoles = (Set<Role>) session.getAttributes().get(CustomWebSocketAttributeKeys.ROLES);
+
         WebSocketSession wrappedSession = new ConcurrentWebSocketSessionDecorator(
                 session,
                 5000, // timeout
                 1024 * 1024 // buffer size limit
         );
 
-        String roomId = getQueryParam(session, "room");
-        String userId = getQueryParam(session, "user");
-
-        wrappedSession.getAttributes().put("roomId", roomId);
+        wrappedSession.getAttributes().put(CustomWebSocketAttributeKeys.ROOM_ID, roomId);
 
         RoomState room = rooms.computeIfAbsent(roomId, k -> new RoomState());
-        room.addSession(wrappedSession, userId);
+        room.setId(roomId);
+        room.addSession(new RoomState.SessionInfo(session, userId, userRoles));
 
         // Отправляем текущее состояние новому клиенту
         sendInitialState(wrappedSession, room);
@@ -58,8 +74,8 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
         JsonNode json = objectMapper.readTree(message.getPayload());
         String type = json.get("type").asText();
-        String roomId = json.get("roomId").asText();
-        String userId = json.get("userId").asText();
+        String userId = session.getAttributes().get(CustomWebSocketAttributeKeys.USER_ID).toString();
+        UUID roomId = (UUID) session.getAttributes().get(CustomWebSocketAttributeKeys.ROOM_ID);
 
         RoomState room = rooms.get(roomId);
         if (room == null) {
@@ -69,12 +85,12 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
         switch (type) {
             case "REQUEST_STATE":
+                if (!roomAccessManager.hasAccessTo(room, session.getId(), RoomAction.READ)) break;
                 sendInitialState(session, room);
                 break;
 
             case "APPLY_OPERATIONS":
-                //todo delete!!!
-                //Thread.sleep(160);
+                if (!roomAccessManager.hasAccessTo(room, session.getId(), RoomAction.WRITE)) break;
                 try {
                     int clientVersion = json.get("baseVersion").asInt();
                     Operation[] clientOperations = objectMapper.treeToValue(
@@ -103,6 +119,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                 break;
 
             case "CURSOR_UPDATE":
+                if (!roomAccessManager.hasAccessTo(room, session.getId(), RoomAction.READ)) break;
                 int position = json.get("position").asInt();
                 String color = json.get("color").asText();
 
@@ -110,7 +127,6 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                     roomState.processCursorUpdate(
                             userId,
                             session.getId(),
-                            roomId,
                             position,
                             color
                     );
@@ -122,11 +138,19 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-        String roomId = (String) session.getAttributes().get("roomId");
+        UUID roomId = (UUID) session.getAttributes().get(CustomWebSocketAttributeKeys.ROOM_ID);
         if (roomId != null && rooms.containsKey(roomId)) {
-            rooms.get(roomId).removeSession(session.getId());
+            RoomState roomState = rooms.get(roomId);
+            roomState.removeSession(session.getId());
 
-            if (rooms.get(roomId).isEmpty()) {
+            if (roomState.isEmpty()) {
+                log.info("Room {} is empty", roomId);
+                //if (!roomState.getContent().isBlank()) {
+                    saveRoomState(roomState);
+                //}
+                //else{
+                    //roomRepository.deleteById(roomId);
+                //}
                 rooms.remove(roomId);
             }
         }
@@ -148,6 +172,24 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
     @Scheduled(fixedRate = 1000 * 10)
     public void broadcastCodeSnapshots() {
         rooms.values().forEach(RoomState::broadcastCodeSnapshot);
+    }
+
+    @Scheduled(fixedRate = 1000 * 60 * 5)
+    public void saveRoomStates() {
+        rooms.values().forEach(this::saveRoomState);
+    }
+
+    private void saveRoomState(@NonNull RoomState roomState) {
+        log.debug("Saving room with id {}", roomState.getId());
+        Room room = roomRepository.findById(roomState.getId()).orElse(null);
+        if (room == null){
+            rooms.remove(roomState.getId());
+            return;
+        }
+        room.setCode(roomState.getContent());
+        room.setAccessMode(roomState.getAccessMode());
+        room.setName(roomState.getName());
+        roomRepository.save(room);
     }
 
     private void sendError(WebSocketSession session, String errorType, String reason) {
