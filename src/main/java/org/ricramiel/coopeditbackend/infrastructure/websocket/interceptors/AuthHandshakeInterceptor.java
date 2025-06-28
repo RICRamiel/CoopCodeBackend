@@ -54,13 +54,19 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
         String tokenValue = getTokenFromRequestOrNull(request);
 
         if (!StringUtils.hasText(tokenValue)) {
-            attributes.put(CustomWebSocketAttributeKeys.USER_ID, "anon_" + UUID.randomUUID());
+            String anonId = "anon_" + UUID.randomUUID();
+            String anonUserName = anonId.substring(0, 13);
+
+            attributes.put(CustomWebSocketAttributeKeys.USER_ID, anonId);
+            attributes.put(CustomWebSocketAttributeKeys.USER_NAME, anonUserName);
             return true;
         }
 
         UUID id = accessTokenService.extractId(tokenValue);
         Set<Role> roles = accessTokenService.extractRoles(tokenValue);
+        String name = accessTokenService.extractName(tokenValue);
         attributes.put(CustomWebSocketAttributeKeys.ROLES, roles);
+        attributes.put(CustomWebSocketAttributeKeys.USER_NAME, name);
         attributes.put(CustomWebSocketAttributeKeys.TOKEN, tokenValue);
         attributes.put(CustomWebSocketAttributeKeys.USER_ID, id.toString());
 

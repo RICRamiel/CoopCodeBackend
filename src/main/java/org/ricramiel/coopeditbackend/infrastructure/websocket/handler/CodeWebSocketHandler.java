@@ -51,6 +51,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
         }
 
         String userId = session.getAttributes().get(CustomWebSocketAttributeKeys.USER_ID).toString();
+        String userName = session.getAttributes().get(CustomWebSocketAttributeKeys.USER_NAME).toString();
         Set<Role> userRoles = (Set<Role>) session.getAttributes().get(CustomWebSocketAttributeKeys.ROLES);
 
         WebSocketSession wrappedSession = new ConcurrentWebSocketSessionDecorator(
@@ -70,7 +71,7 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
                         room.getCode()
                 )
         );
-        roomState.addSession(new RoomState.SessionInfo(session, userId, userRoles));
+        roomState.addSession(new RoomState.SessionInfo(session, userId, userRoles, userName));
 
         // Отправляем текущее состояние новому клиенту
         sendInitialState(wrappedSession, roomState);
@@ -134,7 +135,6 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
                 rooms.computeIfPresent(roomId, (id, roomState) -> {
                     roomState.processCursorUpdate(
-                            userId,
                             session.getId(),
                             position,
                             color

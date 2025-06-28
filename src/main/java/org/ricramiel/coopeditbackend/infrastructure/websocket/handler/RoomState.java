@@ -90,8 +90,9 @@ public class RoomState {
         }
     }
 
-    public void processCursorUpdate(String userId, String sessionId, int position, String color) {
-        broadcastCursorPosition(userId, position, color, sessionId);
+    public void processCursorUpdate(String sessionId, int position, String color) {
+        SessionInfo sessionInfo = sessions.get(sessionId);
+        broadcastCursorPosition(sessionInfo.userName, position, color, sessionId);
     }
 
     private void broadcastCursorPosition(String userId, int position, String color, String excludeSessionId) {
@@ -208,11 +209,13 @@ public class RoomState {
     public static class SessionInfo {
         public WebSocketSession session;
         public String userId;
+        public String userName;
         //public Set<Role> userRoles;
 
-        SessionInfo(WebSocketSession session, String userId, Set<Role> userRoles) {
+        SessionInfo(WebSocketSession session, String userId, Set<Role> userRoles, String userName) {
             this.session = session;
             this.userId = userId;
+            this.userName = userName;
             //this.userRoles = userRoles;
         }
     }
