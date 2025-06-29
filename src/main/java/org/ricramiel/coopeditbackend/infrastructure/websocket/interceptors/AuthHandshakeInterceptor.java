@@ -3,6 +3,7 @@ package org.ricramiel.coopeditbackend.infrastructure.websocket.interceptors;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.ricramiel.coopeditbackend.domain.models.enums.Role;
 import org.ricramiel.coopeditbackend.domain.models.enums.RoomAction;
 import org.ricramiel.coopeditbackend.infrastructure.repositories.RoomRepository;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AuthHandshakeInterceptor implements HandshakeInterceptor {
@@ -31,8 +33,7 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
     private final JwtAccessTokenUtil accessTokenService;
 
     @Override
-    public boolean beforeHandshake(@NonNull ServerHttpRequest request, @NonNull ServerHttpResponse response,
-                                   @NonNull WebSocketHandler wsHandler, @NonNull Map<String, Object> attributes) {
+    public boolean beforeHandshake(@NonNull ServerHttpRequest request, @NonNull ServerHttpResponse response, @NonNull WebSocketHandler wsHandler, @NonNull Map<String, Object> attributes) {
         ServletServerHttpRequest servletRequest = (ServletServerHttpRequest) request;
         HttpServletRequest httpRequest = servletRequest.getServletRequest();
 
@@ -40,8 +41,7 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
 
         try {
             roomId = UUID.fromString(httpRequest.getParameter("room"));
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             response.setStatusCode(HttpStatus.NOT_FOUND);
             return false;
         }
@@ -52,8 +52,9 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
         }
 
         String tokenValue = getTokenFromRequestOrNull(request);
-
-        if (!StringUtils.hasText(tokenValue)) {
+        log.info(tokenValue);
+        if (tokenValue == null || tokenValue.isEmpty()) {
+            log.info("Token is empty");
             String anonId = "anon_" + UUID.randomUUID();
             String anonUserName = anonId.substring(0, 13);
 
@@ -74,14 +75,14 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     @Override
-    public void afterHandshake(@NonNull ServerHttpRequest request, @NonNull ServerHttpResponse response,
-                               @NonNull WebSocketHandler wsHandler, Exception exception) {
+    public void afterHandshake(@NonNull ServerHttpRequest request, @NonNull ServerHttpResponse response, @NonNull WebSocketHandler wsHandler, Exception exception) {
     }
 
     private String getTokenFromRequestOrNull(ServerHttpRequest request) {
-        final String authorizationHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return authorizationHeader.substring(BEARER_PREFIX.length());
+        final String authorizationHeader = request.getHeaders().getFirst(HttpHeaders.COOKIE);
+        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith("AUTH_TOKEN=")) {
+            String temp = authorizationHeader.substring("AUTH_TOKEN=".length());
+            return accessTokenService.isTokenValid(temp) ? temp : null;
         }
         return null;
     }

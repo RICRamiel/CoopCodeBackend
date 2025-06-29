@@ -61,7 +61,7 @@ public class SecurityConfig {
                                 "/auth/oauth2/**",
                                 "/oauth2/**",
                                 "/ws/*",
-                                "*",
+                                "**",
                                 "/auth/refresh")
                         .permitAll()
                         .anyRequest().authenticated()

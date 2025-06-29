@@ -3,6 +3,7 @@ package org.ricramiel.coopeditbackend.domain.models.entities;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.ricramiel.coopeditbackend.domain.models.enums.RoomAccessMode;
 
@@ -35,5 +36,6 @@ public class Room {
     RoomAccessMode accessMode;
 
     @NotNull
+    @Size(min = 0, max = 100000)
     String code;
 }

@@ -32,7 +32,7 @@ public class RoomController {
     }
 
     @GetMapping("{ownerId}")
-    @PreAuthorize("hasRole('ADMIN') or accessChecker.isSelf(ownerId)")
+    @PreAuthorize("hasRole('ADMIN') or @accessChecker.isSelf(#ownerId)")
     public List<RoomDto> getAllRooms(@PathVariable("ownerId") @Param("ownerId") UUID ownerId) {
         return roomService.getAllRoomsByOwner(ownerId);
     }
