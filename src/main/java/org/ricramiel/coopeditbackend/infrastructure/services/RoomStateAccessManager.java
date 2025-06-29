@@ -7,6 +7,7 @@ import org.ricramiel.coopeditbackend.domain.models.enums.Role;
 import org.ricramiel.coopeditbackend.domain.models.enums.RoomAccessMode;
 import org.ricramiel.coopeditbackend.domain.models.enums.RoomAction;
 import org.ricramiel.coopeditbackend.infrastructure.repositories.RoomRepository;
+import org.ricramiel.coopeditbackend.infrastructure.repositories.UserRepository;
 import org.ricramiel.coopeditbackend.infrastructure.websocket.handler.RoomState;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketSession;
