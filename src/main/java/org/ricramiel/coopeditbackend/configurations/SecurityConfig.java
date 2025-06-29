@@ -10,10 +10,12 @@ import org.ricramiel.coopeditbackend.infrastructure.security.filters.JwtFilter;
 import org.ricramiel.coopeditbackend.infrastructure.security.oauth.CustomOauth2User;
 import org.ricramiel.coopeditbackend.infrastructure.security.oauth.OAuth2UserService;
 import org.ricramiel.coopeditbackend.infrastructure.services.AuthService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -31,6 +33,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 
 @Configuration
@@ -42,6 +45,9 @@ public class SecurityConfig {
     private final AuthService authService;
     private final OAuth2UserService oidcUserService;
     private final JwtModelMapper jwtModelMapper;
+
+    @Value("${app.client.base.url}")
+    String clientBaseUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -98,7 +104,22 @@ public class SecurityConfig {
             CustomOauth2User principal = (CustomOauth2User) oauthToken.getPrincipal();
             JwtModel jwt = authService.createAndSaveJwtToken(principal.getUser());
 
-            WriteObjectToHttpResponse(response, jwtModelMapper.toDto(jwt));
+            ResponseCookie accessCookie = ResponseCookie.from("access_token", jwt.getAccessToken())
+                    .path("/")
+                    .maxAge(Duration.ofMinutes(1))
+                    .sameSite("Lax")
+                    .build();
+
+            ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", jwt.getRefreshToken())
+                    .path("/")
+                    .maxAge(Duration.ofMinutes(1))
+                    .sameSite("Lax")
+                    .build();
+
+            response.addHeader("Set-Cookie", accessCookie.toString());
+            response.addHeader("Set-Cookie", refreshCookie.toString());
+
+            response.sendRedirect(clientBaseUrl + "/login");
         };
     }
 

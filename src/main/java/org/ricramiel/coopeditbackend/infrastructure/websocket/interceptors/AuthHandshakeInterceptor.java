@@ -1,5 +1,6 @@
 package org.ricramiel.coopeditbackend.infrastructure.websocket.interceptors;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +53,6 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
         }
 
         String tokenValue = getTokenFromRequestOrNull(request);
-        log.info(tokenValue);
         if (tokenValue == null || tokenValue.isEmpty()) {
             log.info("Token is empty");
             String anonId = "anon_" + UUID.randomUUID();
@@ -79,10 +79,14 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private String getTokenFromRequestOrNull(ServerHttpRequest request) {
-        final String authorizationHeader = request.getHeaders().getFirst(HttpHeaders.COOKIE);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith("AUTH_TOKEN=")) {
-            String temp = authorizationHeader.substring("AUTH_TOKEN=".length());
-            return accessTokenService.isTokenValid(temp) ? temp : null;
+        Cookie[] cookies = ((ServletServerHttpRequest) request).getServletRequest().getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if ("auth_token".equalsIgnoreCase(cookie.getName())) {
+                return accessTokenService.isTokenValid(cookie.getValue()) ? cookie.getValue() : null;
+            }
         }
         return null;
     }

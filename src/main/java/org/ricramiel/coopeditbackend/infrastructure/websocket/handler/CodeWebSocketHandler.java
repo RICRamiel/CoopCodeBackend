@@ -62,11 +62,11 @@ public class CodeWebSocketHandler extends TextWebSocketHandler {
 
         wrappedSession.getAttributes().put(CustomWebSocketAttributeKeys.ROOM_ID, roomId);
 
-        RoomState roomState = rooms.computeIfAbsent(roomId, k ->
+        RoomState roomState = rooms.computeIfAbsent(roomId, id ->
                 new RoomState(
                         room.getAccessMode(),
                         room.getOwnerId(),
-                        room.getId(),
+                        id,
                         room.getName(),
                         room.getCode()
                 )
