@@ -34,7 +34,13 @@ public class RoomService {
     private long roomKeepAliveInMin;
 
     public Room createRoom(@NotNull @Valid RoomCreateRequestModel model) {
-        Room room = Room.builder().owner(currentUserService.getUser()).name(model.getName()).creationDate(LocalDateTime.now()).accessMode(RoomAccessMode.PUBLIC).build();
+        Room room = Room.builder()
+                .owner(currentUserService.getUser())
+                .name(model.getName())
+                .creationDate(LocalDateTime.now())
+                .code("")
+                .accessMode(RoomAccessMode.PUBLIC)
+                .build();
         return roomRepository.save(room);
     }
 
@@ -65,6 +71,8 @@ public class RoomService {
 
     public List<RoomDto> getAllRoomsByOwner(UUID ownerId) {
         List<Room> rooms = roomRepository.findAllByOwnerId(ownerId);
-        return rooms.stream().map(room -> new RoomDto(room.getId(), room.getOwnerId(), room.getName(), room.getCreationDate(), room.getAccessMode(), room.getCode())).collect(Collectors.toCollection(ArrayList::new));
+        return rooms.stream().map(room ->
+                new RoomDto(room.getId(), room.getOwnerId(), room.getName(), room.getCreationDate(), room.getAccessMode()))
+                .toList();
     }
 }

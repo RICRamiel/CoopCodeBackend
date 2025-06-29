@@ -31,11 +31,8 @@ public class RoomController {
         return roomMapper.toDto(roomService.createRoom(new RoomCreateRequestModel(name)));
     }
 
-
-    //TODO(make endpoint in roomaccessmanager to verify who is making this call owner or not. maybe using PostAuthorize)
     @GetMapping("{ownerId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
-//    @PostAuthorize()
+    @PreAuthorize("hasRole('ADMIN') or accessChecker.isSelf(ownerId)")
     public List<RoomDto> getAllRooms(@PathVariable("ownerId") @Param("ownerId") UUID ownerId) {
         return roomService.getAllRoomsByOwner(ownerId);
     }
