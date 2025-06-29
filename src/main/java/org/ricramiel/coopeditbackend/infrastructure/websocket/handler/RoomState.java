@@ -3,8 +3,11 @@ package org.ricramiel.coopeditbackend.infrastructure.websocket.handler;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.ricramiel.coopeditbackend.domain.models.enums.Role;
+import org.ricramiel.coopeditbackend.domain.models.enums.RoomAccessMode;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -15,12 +18,30 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class RoomState {
-    // Остальные методы без изменений
-    @Getter
-    private String content = "";
+    @Getter @Setter
+    private RoomAccessMode accessMode;
+    @Getter @Setter
+    private UUID ownerId;
+    @Getter @Setter
+    private UUID id;
+    @Getter @Setter
+    private String name;
+    @Getter @Setter
+    private String content;
+
+    public RoomState(RoomAccessMode accessMode, UUID ownerId, UUID id, String name, String content) {
+        this.accessMode = accessMode;
+        this.ownerId = ownerId;
+        this.id = id;
+        this.name = name;
+        this.content = content;
+    }
+
     @Getter
     private int version = 0;
+
     private final List<Operation> operationHistory = new ArrayList<>();
+    @Getter
     private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();
 
     public synchronized void processOperations(List<Operation> clientOperations,
@@ -69,15 +90,15 @@ public class RoomState {
         }
     }
 
-    public void processCursorUpdate(String userId, String sessionId, String roomId, int position, String color) {
-        broadcastCursorPosition(userId, roomId, position, color, sessionId);
+    public void processCursorUpdate(String sessionId, int position, String color) {
+        SessionInfo sessionInfo = sessions.get(sessionId);
+        broadcastCursorPosition(sessionInfo.userName, position, color, sessionId);
     }
 
-    private void broadcastCursorPosition(String userId, String roomId, int position, String color, String excludeSessionId) {
+    private void broadcastCursorPosition(String userId, int position, String color, String excludeSessionId) {
         ObjectNode json = JsonNodeFactory.instance.objectNode()
                 .put("type", "REMOTE_CURSOR")
                 .put("userId", userId)
-                .put("roomId", roomId)
                 .put("position", position)
                 .put("color", color);
 
@@ -177,21 +198,25 @@ public class RoomState {
 
     public boolean isEmpty() { return sessions.isEmpty(); }
 
-    public void addSession(WebSocketSession session, String userId) {
-        sessions.put(session.getId(), new SessionInfo(session, userId));
+    public void addSession(SessionInfo sessionInfo) {
+        sessions.put(sessionInfo.session.getId(), sessionInfo);
     }
 
     public void removeSession(String sessionId) {
         sessions.remove(sessionId);
     }
 
-    private static class SessionInfo {
-        WebSocketSession session;
-        String userId;
+    public static class SessionInfo {
+        public WebSocketSession session;
+        public String userId;
+        public String userName;
+        //public Set<Role> userRoles;
 
-        SessionInfo(WebSocketSession session, String userId) {
+        SessionInfo(WebSocketSession session, String userId, Set<Role> userRoles, String userName) {
             this.session = session;
             this.userId = userId;
+            this.userName = userName;
+            //this.userRoles = userRoles;
         }
     }
 }

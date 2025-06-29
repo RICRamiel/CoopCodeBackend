@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 public class RoomMapper {
     public RoomDto toDto(Room model) {
         return RoomDto.builder()
-                .code(model.getCode())
                 .name(model.getName())
                 .accessMode(model.getAccessMode())
                 .ownerId(model.getOwnerId())
